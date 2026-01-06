@@ -1,4 +1,4 @@
-// server.js (Render + Production READY)
+// server.js (Render Fixed)
 
 require("dotenv").config();
 const express = require("express");
@@ -6,17 +6,14 @@ const cors = require("cors");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const app = express();
-
-// IMPORTANT: Render requires dynamic PORT
 const PORT = process.env.PORT || 3000;
 
 // --- Middleware ---
-// UPDATED CORS: Explicitly allows Vercel and Localhost
 app.use(cors({
   origin: [
-    "http://localhost:5500",             // Local Testing (VS Code Live Server)
-    "http://127.0.0.1:5500",             // Local IP
-    "https://noticepro-ai.vercel.app"    // 🚀 YOUR VERCEL APP DOMAIN
+    "http://localhost:5500",
+    "http://127.0.0.1:5500",
+    "https://noticepro-ai.vercel.app"
   ],
   methods: ["GET", "POST"],
   credentials: true
@@ -24,49 +21,45 @@ app.use(cors({
 
 app.use(express.json());
 
-// --- Health Check (MANDATORY for Render) ---
-app.get("/", (req, res) => {
-  res.send("Notice Flow AI Backend is running");
-});
+// --- Health Check ---
+app.get("/", (req, res) => res.send("Backend Alive"));
 
-// --- Validate API Key ---
+// --- AI Setup ---
 if (!process.env.GEMINI_API_KEY) {
   console.error("❌ GEMINI_API_KEY missing");
   process.exit(1);
 }
 
-// --- Gemini AI Initialization (STABLE) ---
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({
-  model: "gemini-1.5-flash"
+
+// FIX: Use a more stable model name alias
+// If 'gemini-1.5-flash' fails, we use 'gemini-1.5-flash-latest'
+const model = genAI.getGenerativeModel({ 
+  model: "gemini-1.5-flash-latest" 
 });
 
-// --- Core AI Endpoint ---
 app.post("/generate-notice", async (req, res) => {
   try {
     const { title, summary, sign, type } = req.body;
 
-    if (!title || !summary || !type) {
-      return res.status(400).json({ error: "Missing required fields" });
+    // Basic Validation
+    if (!title || !summary) {
+      return res.status(400).json({ error: "Title and Summary are required" });
     }
 
     const prompt = `
-You are a highly professional College Administration Officer.
+      You are a College Admin. Write a formal ${type || 'Notice'}.
+      
+      Details:
+      - Title: ${title}
+      - Context: ${summary}
+      - Signatories: ${sign}
 
-Write a formal, well-structured official ${type}.
-
-Rules:
-- Start with: "All the students and staff members are hereby informed that..."
-- Use formal administrative language only
-- Clearly include the summary
-- End with a cooperation request
-- Return ONLY the notice body text
-- Do NOT include subject, date, or signature
-
-Title: ${title}
-Summary: ${summary}
-Authority: ${sign}
-`;
+      Rules:
+      - Formal tone.
+      - Start directly with the body text (No subject line in output).
+      - Output HTML-ready text (use <br> for new lines).
+    `;
 
     const result = await model.generateContent(prompt);
     const response = await result.response;
@@ -75,12 +68,9 @@ Authority: ${sign}
     res.json({ text });
 
   } catch (err) {
-    console.error("❌ Gemini AI Error:", err.message);
-    res.status(500).json({ error: "AI generation failed" });
+    console.error("❌ AI Error:", err.message); // This will show in Render Logs
+    res.status(500).json({ error: "AI Generation Failed. Check Server Logs." });
   }
 });
 
-// --- Start Server ---
-app.listen(PORT, () => {
-  console.log(`🚀 Notice Flow AI Backend running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
