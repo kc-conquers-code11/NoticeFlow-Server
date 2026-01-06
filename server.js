@@ -1,4 +1,4 @@
-// server.js (Direct API Call - No Library Issues)
+// server.js (FINAL FIX - Direct API with Gemini Pro)
 
 require("dotenv").config();
 const express = require("express");
@@ -22,7 +22,7 @@ app.use(cors({
 app.use(express.json());
 
 // --- Health Check ---
-app.get("/", (req, res) => res.send(" Backend is Live (Direct API Mode)"));
+app.get("/", (req, res) => res.send("✅ Backend is Live (Gemini Pro - Direct Mode)"));
 
 // --- Validate Key ---
 if (!process.env.GEMINI_API_KEY) {
@@ -30,13 +30,12 @@ if (!process.env.GEMINI_API_KEY) {
   process.exit(1);
 }
 
-// --- API Endpoint (The "Nuclear" Option) ---
+// --- API Endpoint ---
 app.post("/generate-notice", async (req, res) => {
   try {
     console.log("📩 Processing request...");
     const { title, summary, sign, type } = req.body;
 
-    // 1. Construct the Prompt
     const prompt = `
       You are a professional College Admin. Write a formal ${type || 'Notice'}.
       
@@ -52,9 +51,10 @@ app.post("/generate-notice", async (req, res) => {
       - Do NOT include a subject line or date in the output.
     `;
 
-    // 2. Call Google API Directly (Bypassing the broken library)
     const apiKey = process.env.GEMINI_API_KEY;
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    
+    //  FIX: Switched to 'gemini-pro' (Flash was causing 404s)
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`;
 
     const response = await fetch(url, {
       method: "POST",
@@ -68,20 +68,24 @@ app.post("/generate-notice", async (req, res) => {
 
     const data = await response.json();
 
-    // 3. Error Handling for Google API
+    // Debugging: Log any API errors from Google
     if (!response.ok) {
-      console.error("Google API Error:", data);
+      console.error("❌ Google API Error:", JSON.stringify(data, null, 2));
       throw new Error(data.error?.message || "Google API Refused Connection");
     }
 
-    // 4. Extract Text
-    const generatedText = data.candidates[0].content.parts[0].text;
+    // Extract Text safely
+    const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    
+    if (!generatedText) {
+       throw new Error("No text returned from AI");
+    }
     
     console.log(" Generated successfully");
     res.json({ text: generatedText });
 
   } catch (err) {
-    console.error("❌ Generation Failed:", err.message);
+    console.error(" Critical Server Error:", err.message);
     res.status(500).json({ error: "Generation Failed", details: err.message });
   }
 });
