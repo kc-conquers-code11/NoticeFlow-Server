@@ -11,15 +11,22 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // --- Middleware ---
+// UPDATED CORS: Explicitly allows Vercel and Localhost
 app.use(cors({
-  origin: "*", // later restrict to Vercel domain
-  methods: ["GET", "POST"]
+  origin: [
+    "http://localhost:5500",             // Local Testing (VS Code Live Server)
+    "http://127.0.0.1:5500",             // Local IP
+    "https://noticepro-ai.vercel.app"    // 🚀 YOUR VERCEL APP DOMAIN
+  ],
+  methods: ["GET", "POST"],
+  credentials: true
 }));
+
 app.use(express.json());
 
 // --- Health Check (MANDATORY for Render) ---
 app.get("/", (req, res) => {
-  res.send(" Notice Flow AI Backend is running");
+  res.send("Notice Flow AI Backend is running");
 });
 
 // --- Validate API Key ---
