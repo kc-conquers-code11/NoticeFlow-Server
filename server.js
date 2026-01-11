@@ -4,7 +4,7 @@
 require('dotenv').config(); 
 const express = require('express');
 const cors = require('cors');
-const Groq = require('groq-sdk'); // Changed from Google to Groq
+const Groq = require('groq-sdk');
 
 const app = express();
 
@@ -22,11 +22,10 @@ app.use(express.json());
 app.use(express.static('../')); 
 
 // --- AI Initialization (Groq) ---
-// Note: Ensure GROQ_API_KEY is in your .env file
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-// High Limit Model (Llama 3 8B - Very fast, huge free tier)
-const MODEL = 'llama3-8b-8192'; 
+// ✅ UPDATED MODEL: Llama 3.3 (Old one was decommissioned)
+const MODEL = 'llama-3.3-70b-versatile'; 
 
 // --- Core AI Endpoint ---
 app.post('/generate-notice', async (req, res) => {
