@@ -1,42 +1,39 @@
 // server/server.js
 
-// 1. Load Environment Variables (for the API key)
+// 1. Load Environment Variables
 require('dotenv').config(); 
 const express = require('express');
 const cors = require('cors');
 const { GoogleGenAI } = require('@google/genai');
 
 const app = express();
-// const PORT = 3000;
+
+// --- Configuration ---
+// Render apna PORT dega, nahi toh local pe 5000 chalega
 const PORT = process.env.PORT || 5000; 
 
-// Server start command:
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
-
-const cors = require('cors');
+// --- Middleware (Fixed & Consolidated) ---
+// 1. Enable CORS: Allow all origins (*) so Render/Localhost don't fight
 app.use(cors({
-    origin: '*', // Baad mein isse apne frontend URL se replace kar dena
-    credentials: true
+    origin: '*', 
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type']
 }));
 
-// --- Middleware ---
-// 1. Enable CORS: Allows your frontend (running locally) to talk to this server
-app.use(cors()); 
-// 2. Parse JSON: Allows the server to read the data sent from the frontend
+// 2. Parse JSON: Frontend data read karne ke liye
 app.use(express.json()); 
-// 3. Serve Frontend Files: Allows you to load index.html from the server address
+
+// 3. Serve Frontend Files: Agar root se chala rahe ho toh index.html serve karega
 app.use(express.static('../')); 
 
 // --- AI Initialization ---
-// Initialize the Gemini client using the secure environment variable
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }); 
-const MODEL = 'gemini-2.5-flash'; 
+// Note: 'gemini-2.0-flash' is the current stable reference. 
+const MODEL = 'gemini-2.0-flash'; 
 
-// --- Core AI Endpoint: Handles content generation ---
+// --- Core AI Endpoint ---
 app.post('/generate-notice', async (req, res) => {
-    // Check for the API key immediately for better error handling
+    // Check for API key presence
     if (!process.env.GEMINI_API_KEY) {
         return res.status(500).json({ error: 'Server configuration error: GEMINI_API_KEY is missing.' });
     }
@@ -63,32 +60,41 @@ app.post('/generate-notice', async (req, res) => {
             5. The entire response must be a single block of text (the notice body). DO NOT include the Subject, Date, or Signature/Closing phrase in the output.
         `;
         
-        // 2. Call the Gemini API
+        // Call Gemini API
         const response = await ai.models.generateContent({
             model: MODEL,
             contents: prompt,
             config: {
-                // Lower temperature (0.2) ensures formal, deterministic output
                 temperature: 0.2, 
             },
         });
 
-        const generatedText = response.text.trim();
+        // Safe response handling
+        let generatedText = "";
+        if (typeof response.text === 'function') {
+            generatedText = response.text();
+        } else {
+            generatedText = response.text || "";
+        }
         
-        // 3. Send the AI-generated body text back to the frontend
-        res.json({ text: generatedText });
+        // Send back to frontend
+        res.json({ text: generatedText.trim() });
 
     } catch (error) {
-        console.error("AI Generation Error:", error.message);
-        res.status(500).json({ error: 'Failed to generate notice content from AI. Check server logs.' });
+        console.error("AI Generation Error:", error);
+        res.status(500).json({ error: 'Failed to generate notice content. Check server logs.' });
     }
 });
 
-// --- Server Startup Block (The reason your server was exiting) ---
-// This command keeps the Node.js server running and actively listening on the specified port.
+// --- Health Check Route (For Render) ---
+app.get('/', (req, res) => {
+    res.send("✅ Notice Flow AI Backend is Running!");
+});
+
+// --- Server Startup (Only ONCE at the bottom) ---
 app.listen(PORT, () => {
     console.log(`\n======================================================`);
-    console.log(`  ✅ SmartNotice Backend running on http://localhost:${PORT}`);
-    console.log(`  🔗 Frontend accessible at http://localhost:${PORT}/index.html`);
+    console.log(` ✅ SmartNotice Backend running on Port: ${PORT}`);
+    console.log(` 🔗 Local Access: http://localhost:${PORT}`);
     console.log(`======================================================\n`);
 });
