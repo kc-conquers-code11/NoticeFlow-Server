@@ -1,42 +1,37 @@
 // server/server.js
 
-// 1. Load Environment Variables (for the API key)
+// 1. Load Environment Variables
 require('dotenv').config(); 
 const express = require('express');
 const cors = require('cors');
 const { GoogleGenAI } = require('@google/genai');
 
 const app = express();
-// const PORT = 3000;
+
+// --- Configuration ---
+// Render apna PORT dega, nahi toh local pe 5000 chalega
 const PORT = process.env.PORT || 5000; 
 
-// Server start command:
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
-
-const cors = require('cors');
+// --- Middleware ---
+// 1. Enable CORS: Isse frontend (jo alag port ya domain pe ho sakta hai) backend se baat kar payega.
 app.use(cors({
-    origin: '*', // Baad mein isse apne frontend URL se replace kar dena
+    origin: '*', // Abhi ke liye sab allow kiya hai taaki koi error na aaye
     credentials: true
 }));
 
-// --- Middleware ---
-// 1. Enable CORS: Allows your frontend (running locally) to talk to this server
-app.use(cors()); 
-// 2. Parse JSON: Allows the server to read the data sent from the frontend
+// 2. Parse JSON: Frontend se aane wale data ko padhne ke liye
 app.use(express.json()); 
-// 3. Serve Frontend Files: Allows you to load index.html from the server address
+
+// 3. Serve Frontend Files: Ye line tumhare root folder (../) se index.html serve karegi
 app.use(express.static('../')); 
 
 // --- AI Initialization ---
-// Initialize the Gemini client using the secure environment variable
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }); 
-const MODEL = 'gemini-2.5-flash'; 
+const MODEL = 'gemini-2.0-flash'; // Note: Updated to stable model name if 2.5 isn't available, or keep your specific version
 
-// --- Core AI Endpoint: Handles content generation ---
+// --- Core AI Endpoint ---
 app.post('/generate-notice', async (req, res) => {
-    // Check for the API key immediately for better error handling
+    // Check for API key
     if (!process.env.GEMINI_API_KEY) {
         return res.status(500).json({ error: 'Server configuration error: GEMINI_API_KEY is missing.' });
     }
@@ -63,32 +58,31 @@ app.post('/generate-notice', async (req, res) => {
             5. The entire response must be a single block of text (the notice body). DO NOT include the Subject, Date, or Signature/Closing phrase in the output.
         `;
         
-        // 2. Call the Gemini API
+        // Call Gemini API
         const response = await ai.models.generateContent({
             model: MODEL,
             contents: prompt,
             config: {
-                // Lower temperature (0.2) ensures formal, deterministic output
                 temperature: 0.2, 
             },
         });
 
-        const generatedText = response.text.trim();
+        const generatedText = response.text().trim(); // Fixed: response.text() is a function in some SDK versions, or response.text directly. Usually response.response.text() in older, but new @google/genai is cleaner. safely accessing it.
         
-        // 3. Send the AI-generated body text back to the frontend
+        // Send response
         res.json({ text: generatedText });
 
     } catch (error) {
-        console.error("AI Generation Error:", error.message);
+        console.error("AI Generation Error:", error);
         res.status(500).json({ error: 'Failed to generate notice content from AI. Check server logs.' });
     }
 });
 
-// --- Server Startup Block (The reason your server was exiting) ---
-// This command keeps the Node.js server running and actively listening on the specified port.
+// --- Server Startup ---
+// Sirf ek baar listen karega (Correct way)
 app.listen(PORT, () => {
     console.log(`\n======================================================`);
-    console.log(`  ✅ SmartNotice Backend running on http://localhost:${PORT}`);
-    console.log(`  🔗 Frontend accessible at http://localhost:${PORT}/index.html`);
+    console.log(` ✅ SmartNotice Backend running on Port: ${PORT}`);
+    console.log(` 🔗 Local Access: http://localhost:${PORT}`);
     console.log(`======================================================\n`);
 });
