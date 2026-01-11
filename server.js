@@ -4,38 +4,35 @@
 require('dotenv').config(); 
 const express = require('express');
 const cors = require('cors');
-const { GoogleGenAI } = require('@google/genai');
+const Groq = require('groq-sdk'); // Changed from Google to Groq
 
 const app = express();
 
 // --- Configuration ---
-// Render apna PORT dega, nahi toh local pe 5000 chalega
 const PORT = process.env.PORT || 5000; 
 
-// --- Middleware (Fixed & Consolidated) ---
-// 1. Enable CORS: Allow all origins (*) so Render/Localhost don't fight
+// --- Middleware ---
 app.use(cors({
     origin: '*', 
     methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type']
 }));
 
-// 2. Parse JSON: Frontend data read karne ke liye
 app.use(express.json()); 
-
-// 3. Serve Frontend Files: Agar root se chala rahe ho toh index.html serve karega
 app.use(express.static('../')); 
 
-// --- AI Initialization ---
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }); 
-// Note: 'gemini-2.0-flash' is the current stable reference. 
-const MODEL = 'gemini-2.0-flash'; 
+// --- AI Initialization (Groq) ---
+// Note: Ensure GROQ_API_KEY is in your .env file
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+
+// High Limit Model (Llama 3 8B - Very fast, huge free tier)
+const MODEL = 'llama3-8b-8192'; 
 
 // --- Core AI Endpoint ---
 app.post('/generate-notice', async (req, res) => {
-    // Check for API key presence
-    if (!process.env.GEMINI_API_KEY) {
-        return res.status(500).json({ error: 'Server configuration error: GEMINI_API_KEY is missing.' });
+    // Check for API key
+    if (!process.env.GROQ_API_KEY) {
+        return res.status(500).json({ error: 'Server configuration error: GROQ_API_KEY is missing.' });
     }
 
     try {
@@ -53,48 +50,46 @@ app.post('/generate-notice', async (req, res) => {
             - Document Type: ${type}
             
             **Instructions:**
-            1. The text must use strictly formal, administrative language, matching the professional college notice style.
+            1. The text must use strictly formal, administrative language.
             2. The first sentence must begin with: "All the students and staff members are hereby informed that..." 
             3. Clearly incorporate the "Core Context/Summary" into the body text.
-            4. Conclude with a request for cooperation (e.g., "All concerned are requested to take note of the same and cooperate...") and a standard goodwill closing phrase.
-            5. The entire response must be a single block of text (the notice body). DO NOT include the Subject, Date, or Signature/Closing phrase in the output.
+            4. Conclude with a request for cooperation and a standard goodwill closing phrase.
+            5. The entire response must be a single block of text (the notice body). DO NOT include the Subject, Date, or Signature/Closing phrase in the output. Only the body paragraph.
         `;
         
-        // Call Gemini API
-        const response = await ai.models.generateContent({
+        // Call Groq API
+        const chatCompletion = await groq.chat.completions.create({
+            messages: [
+                {
+                    role: "user",
+                    content: prompt,
+                },
+            ],
             model: MODEL,
-            contents: prompt,
-            config: {
-                temperature: 0.2, 
-            },
+            temperature: 0.2, // Formal tone
+            max_tokens: 1024,
         });
 
         // Safe response handling
-        let generatedText = "";
-        if (typeof response.text === 'function') {
-            generatedText = response.text();
-        } else {
-            generatedText = response.text || "";
-        }
+        const generatedText = chatCompletion.choices[0]?.message?.content || "";
         
-        // Send back to frontend
+        // Send response
         res.json({ text: generatedText.trim() });
 
     } catch (error) {
         console.error("AI Generation Error:", error);
-        res.status(500).json({ error: 'Failed to generate notice content. Check server logs.' });
+        res.status(500).json({ error: 'AI Service Error. Please try again.' });
     }
 });
 
-// --- Health Check Route (For Render) ---
+// --- Health Check Route ---
 app.get('/', (req, res) => {
-    res.send("✅ Notice Flow AI Backend is Running!");
+    res.send("✅ Notice Flow AI (Groq Engine) is Running!");
 });
 
-// --- Server Startup (Only ONCE at the bottom) ---
+// --- Server Startup ---
 app.listen(PORT, () => {
     console.log(`\n======================================================`);
-    console.log(` ✅ SmartNotice Backend running on Port: ${PORT}`);
-    console.log(` 🔗 Local Access: http://localhost:${PORT}`);
+    console.log(` ✅ SmartNotice Backend (Groq) running on Port: ${PORT}`);
     console.log(`======================================================\n`);
 });
